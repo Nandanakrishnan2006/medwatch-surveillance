@@ -1,4 +1,4 @@
-# MedWatch Sentinel
+# MedWatch
 
 ## Goal
 Build a realistic, interactive hospital security operations prototype at the main app address, using mock data only.
