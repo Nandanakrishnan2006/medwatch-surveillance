@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep MedWatch as a frontend-only prototype with centralized in-route mock state, because no real authentication or persistent clinical data is requested.

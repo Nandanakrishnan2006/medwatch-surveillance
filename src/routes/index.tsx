@@ -1,24 +1,157 @@
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  Activity, AlertTriangle, Archive, Bell, Camera, Check, ChevronRight,
+  CircleUserRound, Clock3, DoorOpen, Eye, FileClock, HeartPulse, LayoutDashboard,
+  LockKeyhole, LogOut, Menu, Radio, Search, ShieldCheck, Siren, UserRoundCheck,
+  UsersRound, Video, X, XCircle, Zap,
+} from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
+type View = "Overview" | "Live Surveillance" | "Security Alerts" | "Patient Monitoring" | "Hospital Zones" | "CCTV Health" | "Audit Log" | "Security Controls";
+type AlertStatus = "Verification required" | "Verified" | "Care team notified" | "Family notified" | "Resolved" | "False alarm";
+type AlertRecord = { id: string; event: string; camera: string; zone: string; time: string; severity: "Critical" | "High" | "Medium"; patient?: string; status: AlertStatus; step: number };
+type AuditRecord = { time: string; event: string; user: string; action: string; status: string };
+type PatientRecord = { id: string; expected: string; current: string; lastSeen: string; status: string };
+
+const nav: { label: View; icon: typeof Activity }[] = [
+  { label: "Overview", icon: LayoutDashboard }, { label: "Live Surveillance", icon: Video },
+  { label: "Security Alerts", icon: Siren }, { label: "Patient Monitoring", icon: HeartPulse },
+  { label: "Hospital Zones", icon: DoorOpen }, { label: "CCTV Health", icon: Camera },
+  { label: "Audit Log", icon: FileClock }, { label: "Security Controls", icon: LockKeyhole },
+];
+const cameras = [
+  { id: "CAM-01", zone: "Emergency Entrance", online: true, scene: "entrance" },
+  { id: "CAM-04", zone: "Corridor A", online: true, scene: "corridor" },
+  { id: "CAM-07", zone: "East Ward Lounge", online: true, scene: "lounge" },
+  { id: "CAM-09", zone: "Main Lobby", online: true, scene: "lobby" },
+  { id: "CAM-12", zone: "South Stairwell", online: false, scene: "stairs" },
+  { id: "CAM-15", zone: "Outpatient Corridor", online: true, scene: "corridor" },
+];
+const zones = [
+  { name: "Emergency Department", cameras: "4 / 4", state: "Operational", traffic: "High" },
+  { name: "East Inpatient Ward", cameras: "3 / 3", state: "Operational", traffic: "Moderate" },
+  { name: "Main Lobby", cameras: "2 / 2", state: "Operational", traffic: "Moderate" },
+  { name: "South Access", cameras: "2 / 3", state: "Degraded", traffic: "Low" },
+  { name: "Outpatient Wing", cameras: "4 / 4", state: "Operational", traffic: "Low" },
+];
+const nowTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const todayTime = () => new Date().toLocaleString([], { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+const initialAlerts: AlertRecord[] = [
+  { id: "ALT-1048", event: "Unexpected Patient Absence", camera: "CAM-04", zone: "Corridor A", time: "07:08:42", severity: "High", patient: "PT-2841", status: "Verification required", step: 0 },
+  { id: "ALT-1047", event: "Aggressive Behavior", camera: "CAM-01", zone: "Emergency Entrance", time: "06:51:18", severity: "Critical", status: "Verified", step: 1 },
+  { id: "ALT-1046", event: "Patient Fall", camera: "CAM-07", zone: "East Ward Lounge", time: "06:34:05", severity: "High", patient: "PT-1093", status: "Care team notified", step: 2 },
+  { id: "ALT-1045", event: "Patient Fall", camera: "CAM-09", zone: "Main Lobby", time: "05:58:20", severity: "Medium", patient: "PT-3310", status: "Resolved", step: 5 },
+];
+const initialPatients: PatientRecord[] = [
+  { id: "PT-2841", expected: "East Inpatient Ward", current: "Corridor A", lastSeen: "07:08", status: "Unexpected absence" },
+  { id: "PT-1093", expected: "East Ward Lounge", current: "East Ward Lounge", lastSeen: "07:14", status: "Staff attending" },
+  { id: "PT-3310", expected: "Outpatient Waiting", current: "Outpatient Waiting", lastSeen: "07:13", status: "In expected zone" },
+  { id: "PT-4522", expected: "Rehab Common Area", current: "Rehab Common Area", lastSeen: "07:12", status: "In expected zone" },
+  { id: "PT-7734", expected: "West Ward Day Room", current: "West Ward Day Room", lastSeen: "07:11", status: "In expected zone" },
+];
+const initialAudit: AuditRecord[] = [
+  { time: "Sep 26, 07:09:01", event: "ALT-1048", user: "System", action: "Detection recorded; verification requested", status: "Pending" },
+  { time: "Sep 26, 06:53:40", event: "ALT-1047", user: "S. Rivera", action: "Security verified alert", status: "Complete" },
+  { time: "Sep 26, 06:36:12", event: "ALT-1046", user: "S. Rivera", action: "Nurse notified", status: "Complete" },
+  { time: "Sep 26, 06:10:08", event: "ALT-1045", user: "J. Patel", action: "Case resolved", status: "Closed" },
+  { time: "Sep 26, 05:42:51", event: "ALT-1044", user: "J. Patel", action: "False alarm recorded", status: "Closed" },
+];
+
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({ meta: [
+    { title: "MedWatch | Hospital Security Operations" },
+    { name: "description", content: "MedWatch hospital security operations and incident verification console." },
+    { property: "og:title", content: "MedWatch | Hospital Security Operations" },
+    { property: "og:description", content: "A clinical security operations console for surveillance, verification, and audit workflows." },
+    { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" },
+  ] }),
+  component: MedWatchApp,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function MedWatchApp() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [username, setUsername] = useState(""); const [password, setPassword] = useState("");
+  const [view, setView] = useState<View>("Overview"); const [mobileNav, setMobileNav] = useState(false);
+  const [alerts, setAlerts] = useState(initialAlerts); const [selectedId, setSelectedId] = useState("ALT-1048");
+  const [patients, setPatients] = useState(initialPatients); const [audit, setAudit] = useState(initialAudit);
+  const [filter, setFilter] = useState("All"); const [search, setSearch] = useState(""); const [tick, setTick] = useState(nowTime());
+  useEffect(() => { const timer = window.setInterval(() => setTick(nowTime()), 1000); return () => window.clearInterval(timer); }, []);
+  const selected = alerts.find((item) => item.id === selectedId) ?? alerts[0];
+  const activeCount = alerts.filter((a) => !["Resolved", "False alarm"].includes(a.status)).length;
+  const events = useMemo(() => alerts.slice().sort((a,b) => b.id.localeCompare(a.id)), [alerts]);
+
+  function signIn(e: FormEvent) { e.preventDefault(); if (username.trim() && password.trim()) setLoggedIn(true); }
+  function addAudit(event: string, action: string, status = "Complete") { setAudit((old) => [{ time: todayTime(), event, user: "Security Operator", action, status }, ...old]); }
+  function simulate(kind: "fall" | "aggression" | "leaving") {
+    const map = kind === "fall" ? { event: "Patient Fall", camera: "CAM-07", zone: "East Ward Lounge", severity: "High" as const, patient: "PT-1093" }
+      : kind === "aggression" ? { event: "Aggressive Behavior", camera: "CAM-01", zone: "Emergency Entrance", severity: "Critical" as const }
+      : { event: "Unexpected Patient Absence", camera: "CAM-04", zone: "Corridor A", severity: "High" as const, patient: "PT-2841" };
+    const id = `ALT-${1049 + alerts.length}`; const alert: AlertRecord = { id, ...map, time: nowTime(), status: "Verification required", step: 0 };
+    setAlerts((old) => [alert, ...old]); setSelectedId(id); addAudit(id, "AI detection recorded; security verification requested", "Pending");
+    if (kind === "leaving") setPatients((old) => old.map((p) => p.id === "PT-2841" ? { ...p, current: "Corridor A", lastSeen: nowTime().slice(0,5), status: "Unexpected absence" } : p));
+    setView("Security Alerts");
+  }
+  function setAlert(status: AlertStatus, step: number, action: string) {
+    if (!selected) return; setAlerts((old) => old.map((a) => a.id === selected.id ? { ...a, status, step } : a)); addAudit(selected.id, action, status === "Verification required" ? "Pending" : "Complete");
+  }
+  if (!loggedIn) return <Login username={username} password={password} setUsername={setUsername} setPassword={setPassword} submit={signIn} />;
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="min-h-screen bg-background text-foreground">
+      <aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-sidebar-border bg-sidebar transition-transform lg:translate-x-0 ${mobileNav ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-5"><div className="grid size-8 place-items-center rounded-md bg-primary text-primary-foreground"><ShieldCheck size={18}/></div><div><p className="font-semibold leading-none">MedWatch</p><p className="mt-1 text-[11px] text-sidebar-muted">Security Operations</p></div></div>
+        <nav className="space-y-1 p-3" aria-label="Primary navigation">{nav.map(({label,icon:Icon}) => <button key={label} onClick={() => {setView(label); setMobileNav(false)}} className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${view===label ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"}`}><Icon size={17}/><span>{label}</span>{label === "Security Alerts" && activeCount > 0 && <span className="ml-auto min-w-5 rounded-full bg-destructive px-1.5 py-0.5 text-center text-[10px] text-destructive-foreground">{activeCount}</span>}</button>)}</nav>
+        <div className="absolute inset-x-3 bottom-3 border-t border-sidebar-border pt-3"><div className="rounded-md border border-sidebar-border bg-sidebar-panel p-3"><div className="flex items-center gap-2 text-xs font-medium"><ShieldCheck size={14} className="text-success"/> Protected session</div><p className="mt-1 text-[11px] text-sidebar-muted">RBAC · Audit logging active</p></div></div>
+      </aside>
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm sm:px-6">
+          <div className="flex items-center gap-3"><button aria-label="Open navigation" onClick={()=>setMobileNav(true)} className="grid size-9 place-items-center rounded-md border border-border lg:hidden"><Menu size={18}/></button><div><div className="text-sm font-semibold">St. Catherine Medical Center <span className="font-normal text-muted-foreground">/ MedWatch</span></div><div className="text-xs text-muted-foreground">{view}</div></div></div>
+          <div className="flex items-center gap-2 sm:gap-4"><StatusDot text="All systems operational" className="hidden sm:flex"/><div className="hidden border-l border-border pl-4 md:block"><p className="text-xs font-medium">Security Operator</p><p className="text-[11px] text-muted-foreground">Session active · 28 min</p></div><button title="Sign out" aria-label="Sign out" onClick={()=>setLoggedIn(false)} className="grid size-9 place-items-center rounded-md border border-border text-muted-foreground hover:bg-muted"><LogOut size={16}/></button></div>
+        </header>
+        <main className="mx-auto max-w-[1500px] p-4 sm:p-6">
+          {view === "Overview" && <Overview alerts={events} activeCount={activeCount} onOpen={(id)=>{setSelectedId(id);setView("Security Alerts")}} tick={tick}/>} 
+          {view === "Live Surveillance" && <Surveillance tick={tick} simulate={simulate}/>} 
+          {view === "Security Alerts" && <Alerts alerts={alerts} selected={selected} setSelectedId={setSelectedId} filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} setAlert={setAlert} onViewCamera={()=>setView("Live Surveillance")}/>} 
+          {view === "Patient Monitoring" && <Patients patients={patients}/>} 
+          {view === "Hospital Zones" && <Zones/>}
+          {view === "CCTV Health" && <CameraHealth tick={tick}/>} 
+          {view === "Audit Log" && <Audit entries={audit}/>} 
+          {view === "Security Controls" && <Controls/>}
+        </main>
+      </div>{mobileNav && <button aria-label="Close navigation" onClick={()=>setMobileNav(false)} className="fixed inset-0 z-30 bg-overlay lg:hidden"/>}
     </div>
   );
 }
+
+function Login({username,password,setUsername,setPassword,submit}:{username:string;password:string;setUsername:(v:string)=>void;setPassword:(v:string)=>void;submit:(e:FormEvent)=>void}) {
+  return <main className="grid min-h-screen place-items-center bg-muted p-5"><section className="w-full max-w-sm rounded-lg border border-border bg-background shadow-sm"><div className="border-b border-border p-6"><div className="flex items-center gap-3"><div className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground"><ShieldCheck size={20}/></div><div><h1 className="font-semibold">MedWatch</h1><p className="text-xs text-muted-foreground">Hospital Security Operations</p></div></div></div><form onSubmit={submit} className="space-y-4 p-6"><div><label className="mb-1.5 block text-xs font-medium" htmlFor="username">Username</label><input id="username" value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/20" placeholder="Enter operator ID"/></div><div><label className="mb-1.5 block text-xs font-medium" htmlFor="password">Password</label><input id="password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-ring/20" placeholder="Enter password"/></div><button disabled={!username.trim()||!password.trim()} className="h-10 w-full rounded-md bg-primary text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">Sign in securely</button></form><div className="border-t border-border bg-muted/60 px-6 py-4 text-[11px] leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Authorized personnel only.</span> Activity is monitored and recorded. Demo access accepts any non-empty credentials.</div></section></main>
+}
+
+function PageHead({title,description,actions}:{title:string;description:string;actions?:React.ReactNode}) { return <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">{title}</h1><p className="mt-1 text-sm text-muted-foreground">{description}</p></div>{actions}</div> }
+function StatusDot({text,className=""}:{text:string;className?:string}) { return <div className={`items-center gap-2 text-xs text-muted-foreground ${className}`}><span className="size-2 rounded-full bg-success"/>{text}</div> }
+function Badge({children,tone="neutral"}:{children:React.ReactNode;tone?:"neutral"|"danger"|"warning"|"success"|"info"}) { return <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold ${tone === "danger" ? "bg-danger-soft text-danger" : tone === "warning" ? "bg-warning-soft text-warning-strong" : tone === "success" ? "bg-success-soft text-success-strong" : tone === "info" ? "bg-info-soft text-info-strong" : "bg-muted text-muted-foreground"}`}>{children}</span> }
+function Panel({children,className=""}:{children:React.ReactNode;className?:string}) { return <section className={`rounded-md border border-border bg-card ${className}`}>{children}</section> }
+
+function Overview({alerts,activeCount,onOpen,tick}:{alerts:AlertRecord[];activeCount:number;onOpen:(id:string)=>void;tick:string}) {
+ const stats = [{label:"Cameras Online",value:"14 / 15",note:"1 requires attention",icon:Camera},{label:"Active Alerts",value:String(activeCount),note:"Verification queue",icon:AlertTriangle},{label:"Patients Monitored",value:"48",note:"Privacy-safe identifiers",icon:UsersRound},{label:"Zones Monitored",value:"5",note:"All authorized areas",icon:DoorOpen}];
+ return <><PageHead title="Operations Overview" description={`Live operational picture · ${tick}`} actions={<Badge tone="success">NORMAL OPERATIONS</Badge>}/><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{stats.map(({label,value,note,icon:Icon},i)=><Panel key={label} className="p-4"><div className="flex items-start justify-between"><div><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p><p className="mt-1 text-xs text-muted-foreground">{note}</p></div><div className={`grid size-9 place-items-center rounded-md ${i===1&&activeCount ? "bg-danger-soft text-danger":"bg-info-soft text-info-strong"}`}><Icon size={18}/></div></div></Panel>)}</div><Panel className="mt-5"><div className="flex items-center justify-between border-b border-border px-4 py-3"><div><h2 className="text-sm font-semibold">Live Security Events</h2><p className="text-xs text-muted-foreground">Most recent detections and operator actions</p></div><span className="flex items-center gap-1.5 text-[11px] text-success"><Radio size={12}/> LIVE</span></div><div className="divide-y divide-border">{alerts.slice(0,6).map(a=><button onClick={()=>onOpen(a.id)} key={a.id} className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"><div className={`grid size-8 place-items-center rounded-md ${a.severity==="Critical"?"bg-danger-soft text-danger":"bg-warning-soft text-warning-strong"}`}><AlertTriangle size={15}/></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium">{a.event}</span><Badge tone={a.status==="Verification required"?"warning":a.status==="Resolved"?"success":"info"}>{a.status}</Badge></div><p className="mt-0.5 truncate text-xs text-muted-foreground">{a.camera} · {a.zone}{a.patient?` · ${a.patient}`:""}</p></div><div className="flex items-center gap-2 text-xs tabular-nums text-muted-foreground"><span>{a.time}</span><ChevronRight size={15}/></div></button>)}</div></Panel></>
+}
+
+function CameraFeed({camera,tick}:{camera:typeof cameras[number];tick:string}) { return <div className="overflow-hidden rounded-md border border-camera-border bg-camera"><div className="relative aspect-video overflow-hidden"><div className={`camera-scene scene-${camera.scene} absolute inset-0`}><span className="hall-line one"/><span className="hall-line two"/><span className="person person-a"/><span className="person person-b"/></div><div className="absolute inset-x-0 top-0 flex items-center justify-between bg-camera-overlay px-2.5 py-2 text-[10px] text-camera-foreground"><span className="font-semibold">{camera.id}</span><span className="tabular-nums">{tick}</span></div>{!camera.online&&<div className="absolute inset-0 grid place-items-center bg-camera-off text-xs font-semibold text-camera-foreground"><span className="rounded border border-camera-border px-3 py-2">SIGNAL UNAVAILABLE</span></div>}<div className="absolute bottom-2 left-2"><Badge tone={camera.online?"success":"danger"}>{camera.online?"ONLINE":"OFFLINE"}</Badge></div></div><div className="flex items-center justify-between bg-card px-3 py-2"><div><p className="text-xs font-semibold">{camera.zone}</p><p className="text-[10px] text-muted-foreground">Common / security area</p></div><Eye size={15} className="text-muted-foreground"/></div></div> }
+function Surveillance({tick,simulate}:{tick:string;simulate:(k:"fall"|"aggression"|"leaving")=>void}) { return <><PageHead title="Live Surveillance" description="Authorized common areas only · No facial recognition" actions={<StatusDot text="14 of 15 feeds online" className="flex"/>}/><Panel className="mb-4 p-3"><div className="flex flex-wrap items-center gap-2"><span className="mr-1 text-xs font-semibold uppercase text-muted-foreground">Demo simulations</span><button onClick={()=>simulate("fall")} className="control-btn"><Activity size={14}/> Simulate Fall</button><button onClick={()=>simulate("aggression")} className="control-btn"><Zap size={14}/> Simulate Aggressive Behavior</button><button onClick={()=>simulate("leaving")} className="control-btn"><DoorOpen size={14}/> Simulate Patient Leaving</button></div></Panel><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{cameras.map(c=><CameraFeed key={c.id} camera={c} tick={tick}/>)}</div><p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><LockKeyhole size={13}/> Privacy zones are excluded from all camera coverage. Prototype uses simulated video only.</p></> }
+
+function Alerts({alerts,selected,setSelectedId,filter,setFilter,search,setSearch,setAlert,onViewCamera}:{alerts:AlertRecord[];selected:AlertRecord|undefined;setSelectedId:(v:string)=>void;filter:string;setFilter:(v:string)=>void;search:string;setSearch:(v:string)=>void;setAlert:(s:AlertStatus,step:number,a:string)=>void;onViewCamera:()=>void}) {
+ const filtered=alerts.filter(a=>(filter==="All"||(filter==="Open"?!["Resolved","False alarm"].includes(a.status):a.status===filter))&&(a.event+a.id+a.zone).toLowerCase().includes(search.toLowerCase()));
+ return <><PageHead title="Security Alerts" description="Human verification is required before escalation"/><div className="grid gap-4 xl:grid-cols-[380px_1fr]"><Panel className="overflow-hidden"><div className="space-y-3 border-b border-border p-3"><div className="relative"><Search size={14} className="absolute left-3 top-2.5 text-muted-foreground"/><input aria-label="Search alerts" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search alert, camera or zone" className="h-9 w-full rounded-md border border-input pl-9 pr-3 text-xs outline-none focus:border-primary"/></div><div className="flex gap-1">{["All","Open","Resolved","False alarm"].map(f=><button key={f} onClick={()=>setFilter(f)} className={`rounded px-2.5 py-1.5 text-[11px] font-medium ${filter===f?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground hover:text-foreground"}`}>{f}</button>)}</div></div><div className="max-h-[690px] divide-y divide-border overflow-auto">{filtered.map(a=><button key={a.id} onClick={()=>setSelectedId(a.id)} className={`w-full p-3 text-left ${selected?.id===a.id?"bg-info-soft":"hover:bg-muted/50"}`}><div className="flex items-center justify-between"><span className="text-xs font-semibold">{a.id}</span><Badge tone={a.severity==="Critical"?"danger":a.severity==="High"?"warning":"neutral"}>{a.severity}</Badge></div><p className="mt-2 text-sm font-medium">{a.event}</p><p className="mt-1 text-xs text-muted-foreground">{a.camera} · {a.zone}</p><div className="mt-2 flex items-center justify-between"><Badge tone={a.status==="Verification required"?"warning":a.status==="Resolved"?"success":"info"}>{a.status}</Badge><span className="text-[11px] tabular-nums text-muted-foreground">{a.time}</span></div></button>)}</div></Panel>{selected&&<AlertDetail alert={selected} setAlert={setAlert} onViewCamera={onViewCamera}/>}</div></>
+}
+function AlertDetail({alert,setAlert,onViewCamera}:{alert:AlertRecord;setAlert:(s:AlertStatus,step:number,a:string)=>void;onViewCamera:()=>void}) {
+ const steps=["AI Detection","Security Verification","Care Team Notification","Family Notification","Case Resolution","Audit Log"];
+ const terminal=alert.status==="Resolved"||alert.status==="False alarm";
+ return <Panel className="overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card-header px-5 py-4"><div><p className="text-xs font-semibold text-danger">AI DETECTION — VERIFICATION REQUIRED</p><h2 className="mt-1 text-lg font-semibold">{alert.event}</h2></div><Badge tone={alert.severity==="Critical"?"danger":"warning"}>{alert.severity.toUpperCase()} SEVERITY</Badge></div><div className="p-5"><div className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">{[["EVENT",alert.event],["CAMERA / ZONE",`${alert.camera} / ${alert.zone}`],["TIME",alert.time],["PATIENT ID",alert.patient??"Not applicable"]].map(([k,v])=><div className="bg-card p-3" key={k}><p className="text-[10px] font-semibold text-muted-foreground">{k}</p><p className="mt-1 text-sm font-medium">{v}</p></div>)}</div><div className="mt-6"><p className="mb-3 text-xs font-semibold uppercase text-muted-foreground">Escalation workflow</p><div className="grid gap-2 md:grid-cols-6">{steps.map((s,i)=><div key={s} className="relative"><div className={`flex min-h-16 items-center gap-2 rounded-md border p-2.5 ${i<alert.step||terminal?"border-success-border bg-success-soft":i===alert.step?"border-primary bg-info-soft":"border-border bg-muted/40"}`}><span className={`grid size-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${i<alert.step||terminal?"bg-success text-success-foreground":i===alert.step?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground"}`}>{i<alert.step||terminal?<Check size={12}/>:i+1}</span><span className="text-[11px] font-medium leading-tight">{s}</span></div></div>)}</div></div>{alert.event==="Unexpected Patient Absence"&&<div className="mt-5 border-l-2 border-warning bg-warning-soft p-3"><p className="text-sm font-semibold">Unexpected absence detected</p><p className="mt-1 text-xs text-muted-foreground">Last seen: Corridor A · Staff verification required</p></div>}<div className="mt-6 flex flex-wrap gap-2">{alert.status==="Verification required"&&<><button onClick={()=>setAlert("Verified",1,"Security verified alert")} className="primary-btn"><UserRoundCheck size={15}/> Verify</button><button onClick={()=>setAlert("False alarm",5,"False alarm recorded")} className="danger-btn"><XCircle size={15}/> Reject / False Alarm</button></>}<button onClick={onViewCamera} className="control-btn"><Eye size={15}/> View Camera</button>{alert.status==="Verified"&&<button onClick={()=>setAlert("Care team notified",2,"Nurse / care team notified")} className="primary-btn"><Bell size={15}/> Notify Care Team</button>}{alert.status==="Care team notified"&&<><button onClick={()=>setAlert("Family notified",3,"Family notification initiated")} className="control-btn"><CircleUserRound size={15}/> Notify Family</button><button onClick={()=>setAlert("Resolved",5,"Case resolved")} className="primary-btn"><Check size={15}/> Resolve Case</button></>}{alert.status==="Family notified"&&<button onClick={()=>setAlert("Resolved",5,"Case resolved")} className="primary-btn"><Check size={15}/> Resolve Case</button>}</div><div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck size={14}/><span>Permission check passed: Security Operator · Every action is audit logged</span></div></div></Panel>
+}
+
+function Patients({patients}:{patients:PatientRecord[]}) { return <><PageHead title="Patient Monitoring" description="Minimum necessary information for location safety monitoring" actions={<Badge tone="info">48 PATIENT IDS MONITORED</Badge>}/><Panel className="overflow-hidden"><div className="table-wrap"><table><thead><tr><th>Patient ID</th><th>Expected Zone</th><th>Current / Last Detected Zone</th><th>Last Seen</th><th>Status</th></tr></thead><tbody>{patients.map(p=><tr key={p.id}><td className="font-semibold">{p.id}</td><td>{p.expected}</td><td>{p.current}</td><td className="tabular-nums">{p.lastSeen}</td><td>{p.status==="Unexpected absence"?<div><Badge tone="warning">Unexpected absence detected</Badge><p className="mt-1 text-[11px] text-muted-foreground">Last seen: Corridor A · Staff verification required</p></div>:<Badge tone={p.status==="Staff attending"?"info":"success"}>{p.status}</Badge>}</td></tr>)}</tbody></table></div></Panel><p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><LockKeyhole size={13}/> No names, diagnoses, medications, or biometric identity data are displayed.</p></> }
+function Zones(){return <><PageHead title="Hospital Zones" description="Authorized surveillance coverage by operational area"/><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{zones.map(z=><Panel key={z.name} className="p-4"><div className="flex items-start justify-between"><div className="grid size-9 place-items-center rounded-md bg-info-soft text-info-strong"><DoorOpen size={17}/></div><Badge tone={z.state==="Operational"?"success":"warning"}>{z.state}</Badge></div><h2 className="mt-4 text-sm font-semibold">{z.name}</h2><div className="mt-3 grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs"><div><p className="text-muted-foreground">Camera health</p><p className="mt-1 font-semibold">{z.cameras}</p></div><div><p className="text-muted-foreground">Current traffic</p><p className="mt-1 font-semibold">{z.traffic}</p></div></div></Panel>)}</div><Panel className="mt-4 p-4"><div className="flex items-start gap-3"><LockKeyhole size={17} className="mt-0.5 text-info-strong"/><div><p className="text-sm font-semibold">Privacy coverage policy</p><p className="mt-1 text-xs leading-relaxed text-muted-foreground">Coverage is limited to entrances, corridors, waiting areas, lounges, and access points. Bathrooms, changing rooms, treatment rooms, and other private spaces are excluded.</p></div></div></Panel></>}
+function CameraHealth({tick}:{tick:string}){return <><PageHead title="CCTV Health" description={`Device connectivity and feed integrity · ${tick}`}/><div className="grid gap-3 sm:grid-cols-3"><Panel className="p-4"><p className="text-xs text-muted-foreground">Online feeds</p><p className="mt-1 text-2xl font-semibold">14</p></Panel><Panel className="p-4"><p className="text-xs text-muted-foreground">Offline feeds</p><p className="mt-1 text-2xl font-semibold text-danger">1</p></Panel><Panel className="p-4"><p className="text-xs text-muted-foreground">Average uptime</p><p className="mt-1 text-2xl font-semibold">99.7%</p></Panel></div><Panel className="mt-4 overflow-hidden"><div className="table-wrap"><table><thead><tr><th>Camera</th><th>Zone</th><th>Connection</th><th>Feed integrity</th><th>Last check</th></tr></thead><tbody>{cameras.map(c=><tr key={c.id}><td className="font-semibold">{c.id}</td><td>{c.zone}</td><td><Badge tone={c.online?"success":"danger"}>{c.online?"Online":"Offline"}</Badge></td><td>{c.online?"Stable · 1080p":"No signal"}</td><td className="tabular-nums">{c.online?tick:"06:47:12"}</td></tr>)}</tbody></table></div></Panel></>}
+function Audit({entries}:{entries:AuditRecord[]}){return <><PageHead title="Audit Log" description="Immutable activity record for security operations" actions={<Badge tone="success">LOGGING ACTIVE</Badge>}/><Panel className="overflow-hidden"><div className="table-wrap"><table><thead><tr><th>Timestamp</th><th>Event</th><th>User</th><th>Action</th><th>Status</th></tr></thead><tbody>{entries.map((e,i)=><tr key={`${e.time}-${i}`}><td className="whitespace-nowrap tabular-nums">{e.time}</td><td className="font-semibold">{e.event}</td><td>{e.user}</td><td>{e.action}</td><td><Badge tone={e.status==="Pending"?"warning":"success"}>{e.status}</Badge></td></tr>)}</tbody></table></div></Panel></>}
+function Controls(){const items=[{icon:ShieldCheck,title:"Role-based access",detail:"Security Operator · Standard verification privileges",ok:true},{icon:Clock3,title:"Session status",detail:"Active · automatic timeout policy enabled",ok:true},{icon:UserRoundCheck,title:"Permission checks",detail:"Required before every alert workflow action",ok:true},{icon:Camera,title:"CCTV health monitoring",detail:"14 of 15 camera feeds operational",ok:false},{icon:Archive,title:"Audit logging",detail:"All operator and system actions recorded",ok:true}];return <><PageHead title="Security Controls" description="Access, privacy, and operational safeguards"/><div className="grid gap-3 lg:grid-cols-2">{items.map(({icon:Icon,title,detail,ok})=><Panel className="flex items-start gap-3 p-4" key={title}><div className={`grid size-9 shrink-0 place-items-center rounded-md ${ok?"bg-success-soft text-success-strong":"bg-warning-soft text-warning-strong"}`}><Icon size={17}/></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold">{title}</h2><Badge tone={ok?"success":"warning"}>{ok?"ACTIVE":"ATTENTION"}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div></Panel>)}</div><Panel className="mt-4 p-5"><h2 className="text-sm font-semibold">Privacy safeguards</h2><div className="mt-3 grid gap-3 text-xs text-muted-foreground sm:grid-cols-2"><p className="flex gap-2"><Check size={14} className="shrink-0 text-success"/> Cameras restricted to approved common and security areas</p><p className="flex gap-2"><Check size={14} className="shrink-0 text-success"/> No facial recognition in this prototype</p><p className="flex gap-2"><Check size={14} className="shrink-0 text-success"/> Patient data limited to pseudonymous identifiers</p><p className="flex gap-2"><Check size={14} className="shrink-0 text-success"/> Human verification required before escalation</p></div></Panel></>}
