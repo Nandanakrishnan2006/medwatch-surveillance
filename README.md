@@ -1,187 +1,71 @@
-# Sentinel Watch
+# MedWatch
 
-Build a realistic hospital security operations web app called “MedWatch Sentinel”. Make it interactive.
+> A hospital security operations platform for monitoring security events, verifying incidents, and coordinating incident response.
 
-IMPORTANT DESIGN DIRECTION:
-Do NOT make this look like an AI-generated SaaS landing page or futuristic AI dashboard.
-It should look like a real internal hospital security product that could be used by trained staff.
+MedWatch is a frontend hackathon prototype designed to demonstrate how intelligent security detection can support hospital security teams while keeping humans responsible for verification and escalation decisions.
 
-DESIGN:
-- Clean enterprise hospital/SOC interface
-- White and very light gray background
-- Dark navy typography
-- Subtle blue and teal accents
-- Thin borders
-- Small, restrained status badges
-- Compact cards
-- Consistent spacing and alignment
-- Minimal shadows
-- No gradients
-- No glowing effects
-- No oversized headings
-- No unnecessary illustrations
-- No AI brain/robot graphics
-- No excessive rounded-pill UI
-- Avoid the typical “AI startup” aesthetic
+The platform combines simulated CCTV monitoring, security alerts, patient location monitoring, human verification, escalation workflows, and audit logging into a single hospital security operations interface.
 
-The interface should feel functional, serious, trustworthy and slightly clinical.
+> **⚠️ Prototype Notice:** MedWatch is a frontend demonstration using mock data. It is not intended for real-world medical, security, or emergency operations.
 
-LOGIN:
-Create a simple dummy login screen.
-Username + password.
-Any non-empty values allow login.
-No real authentication yet.
+---
 
-MAIN APPLICATION:
+## 📌 Problem Statement
 
-Left sidebar:
-- Overview
-- Live Surveillance
-- Security Alerts
-- Patient Monitoring
-- Hospital Zones
-- CCTV Health
-- Audit Log
-- Security Controls
+Hospitals are complex environments where security teams need to monitor multiple areas, respond to incidents, and coordinate with clinical staff while protecting patient privacy.
 
-Top bar:
-- Hospital / MedWatch Sentinel
-- Current user role
-- System status
-- Session status
+Events such as:
 
-OVERVIEW:
-Show a concise operations dashboard:
-- Cameras Online
-- Active Alerts
-- Patients Monitored
-- Zones Monitored
+- Patient falls
+- Aggressive behavior
+- Unexpected patient absence
+- Movement outside expected hospital zones
+- CCTV failures
 
-Below that, show:
-LIVE SECURITY EVENTS
-A chronological list of recent events.
+can require immediate attention.
 
-LIVE SURVEILLANCE:
-Show realistic CCTV panels representing hospital corridors and common areas.
+However, security teams may face several challenges:
 
-Each camera panel should contain:
-- Camera ID
-- Hospital zone
-- Online/offline status
-- Timestamp
-- Simulated video feed
+- Monitoring multiple cameras simultaneously
+- Identifying important events among routine activity
+- Coordinating security and care teams
+- Managing false alarms
+- Maintaining a clear history of incidents
+- Protecting sensitive patient information
 
-Provide small demo controls:
-- Simulate Fall
-- Simulate Aggressive Behavior
-- Simulate Patient Leaving
+Simply generating automated alerts is not enough. Staff need a system that allows them to **review, verify, escalate, and resolve incidents through a clear workflow**.
 
-DETECTION:
-The system can detect:
-- Patient Fall
-- Aggressive Behavior
-- Unexpected Patient Absence
+---
 
-When triggered, create a security alert.
+## 💡 Solution
 
-Alert must clearly show:
-EVENT
-CAMERA / ZONE
-TIME
-SEVERITY
-PATIENT ID if applicable
+MedWatch provides a centralized hospital security operations interface that helps security personnel monitor events and coordinate responses.
 
-Use wording:
-“AI DETECTION — VERIFICATION REQUIRED”
+The system uses simulated intelligent detection to identify events such as:
 
-Do not automatically escalate the event.
+- **Patient Fall**
+- **Aggressive Behavior**
+- **Unexpected Patient Absence**
 
-ESCALATION WORKFLOW:
+When an event is detected, the system creates an alert marked:
 
+> **AI DETECTION — VERIFICATION REQUIRED**
+
+The system does **not automatically escalate** the event.
+
+A security staff member must first review and verify the detection before the incident can move to the next stage.
+
+### Incident Workflow
+
+```text
 AI Detection
-→ Security Verification
-→ Nurse / Care Team Notification
-→ Family Notification if required
-→ Case Resolution
-→ Audit Log
-
-Make this workflow visually obvious in the alert detail page.
-
-HUMAN VERIFICATION:
-Security personnel must have:
-- Verify
-- Reject / False Alarm
-- View Camera
-
-Only after verification can the event move to the next escalation level.
-
-PATIENT MONITORING:
-Show privacy-conscious information only:
-- Patient ID
-- Expected Zone
-- Current/Last Detected Zone
-- Last Seen
-- Status
-
-Do NOT display patient names, diagnoses, medications or unnecessary medical information.
-
-For missing-patient detection, show:
-“Unexpected absence detected”
-“Last seen: Corridor A”
-“Staff verification required”
-
-AUDIT LOG:
-Create a realistic table:
-Timestamp | Event | User | Action | Status
-
-Examples:
-Security verified alert
-Nurse notified
-Family notification initiated
-Case resolved
-False alarm recorded
-
-CYBERSECURITY:
-Include subtle indicators for:
-- Role-based access
-- Session status
-- Permission checks
-- CCTV health
-- Audit logging
-
-PRIVACY:
-Represent cameras only in appropriate hospital common/security areas.
-No cameras in bathrooms, changing rooms or other private spaces.
-No facial recognition in this prototype.
-
-FUNCTIONALITY:
-This is a frontend hackathon prototype.
-Use mock data.
-Make the simulated events actually update the dashboard, alerts and audit log.
-Make it interactive.
-
-Keep the UI restrained and believable.
-Prioritize usability and workflow clarity over visual effects.
-
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://medwatch-surveillance.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/924c7709-e283-41d0-b43c-50eb020948fd).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
+     ↓
+Security Verification
+     ↓
+Nurse / Care Team Notification
+     ↓
+Family Notification (if required)
+     ↓
+Case Resolution
+     ↓
+Audit Log
